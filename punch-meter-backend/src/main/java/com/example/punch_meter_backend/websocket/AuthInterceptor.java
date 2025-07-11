@@ -27,4 +27,17 @@ public class AuthInterceptor implements HandshakeInterceptor {
             Exception exception) {
 
     }
+
+    private String extractToken(@Nonnull ServerHttpRequest request) {
+        String authHeader = request.getHeaders().getFirst("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7); // Remove "Bearer " prefix
+        }
+
+        return null;
+    }
+
+    private boolean isValidToken(String token) {
+        
+    }
 }
