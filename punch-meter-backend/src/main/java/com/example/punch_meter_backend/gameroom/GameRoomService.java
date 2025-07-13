@@ -1,8 +1,8 @@
 package com.example.punch_meter_backend.gameroom;
 
 import com.example.punch_meter_backend.gameroom.dto.*;
-import com.example.punch_meter_backend.gameroom.record.CreateRoomResult;
-import com.example.punch_meter_backend.gameroom.record.JoinRoomResult;
+import com.example.punch_meter_backend.gameroom.internal.CreateRoomResult;
+import com.example.punch_meter_backend.gameroom.internal.JoinRoomResult;
 import com.example.punch_meter_backend.player.PlayerController;
 
 import java.util.List;

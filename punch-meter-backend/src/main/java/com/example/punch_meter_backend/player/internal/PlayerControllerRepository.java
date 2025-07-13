@@ -1,5 +1,6 @@
-package com.example.punch_meter_backend.player;
+package com.example.punch_meter_backend.player.internal;
 
+import com.example.punch_meter_backend.player.PlayerController;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.List;

@@ -1,5 +1,7 @@
-package com.example.punch_meter_backend.gameroom;
+package com.example.punch_meter_backend.gameroom.internal;
 
+import com.example.punch_meter_backend.gameroom.GameRoom;
+import com.example.punch_meter_backend.gameroom.GameRoomService;
 import com.example.punch_meter_backend.gameroom.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +26,7 @@ public class GameRoomController {
     public void createRoom(@Payload CreateRoomRequest request, SimpMessageHeaderAccessor headerAccessor) {
         String sessionId = headerAccessor.getSessionId();
 
-        GameRoomService.CreateRoomResult result = gameRoomService.createRoomWithResponse(
+        CreateRoomResult result = gameRoomService.createRoomWithResponse(
                 request.getRoomName(),
                 request.getDeviceId()
         );
@@ -49,7 +51,7 @@ public class GameRoomController {
     public void joinRoom(@Payload JoinRoomRequest request, SimpMessageHeaderAccessor headerAccessor) {
         String sessionId = headerAccessor.getSessionId();
 
-        GameRoomService.JoinRoomResult result = gameRoomService.joinRoomWithResponse(
+        JoinRoomResult result = gameRoomService.joinRoomWithResponse(
                 request.getRoomCode(),
                 request.getPlayerName(),
                 request.getDeviceId(),
@@ -65,17 +67,14 @@ public class GameRoomController {
             headerAccessor.getSessionAttributes().put("playerName", request.getPlayerName());
             headerAccessor.getSessionAttributes().put("isHost", false);
 
-            // Send success response to controller
-            messagingTemplate.convertAndSend("/topic/room/" + room.getRoomCode() + "/controller/" + request.getDeviceId(),
-                    result.roomState());
+            var consolidatedMessage = new GameUpdateMessage(
+                    result.roomState(),
+                    result.playerActionEvent(),
+                    request.getDeviceId(),
+                    System.currentTimeMillis()
+            );
 
-            // Notify main screen about new player
-            messagingTemplate.convertAndSend("/topic/room/" + room.getRoomCode() + "/host",
-                    result.playerActionEvent());
-
-            // Notify all controllers about room state change
-            messagingTemplate.convertAndSend("/topic/room/" + room.getRoomCode() + "/state",
-                    result.roomState());
+            messagingTemplate.convertAndSend("/topic/room/" + room.getRoomCode() + "/updates", consolidatedMessage);
         } else {
             messagingTemplate.convertAndSend("/topic/room/" + request.getRoomCode() + "/controller/" + request.getDeviceId(),
                     new ErrorResponse(result.errorMessage()));

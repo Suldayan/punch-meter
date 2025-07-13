@@ -1,4 +1,4 @@
-package com.example.punch_meter_backend.gameroom.record;
+package com.example.punch_meter_backend.gameroom.internal;
 
 import com.example.punch_meter_backend.gameroom.GameRoom;
 import com.example.punch_meter_backend.gameroom.dto.RoomStateResponse;

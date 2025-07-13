@@ -1,12 +1,14 @@
-package com.example.punch_meter_backend.gameroom;
+package com.example.punch_meter_backend.gameroom.internal;
 
+import com.example.punch_meter_backend.gameroom.GameRoom;
+import com.example.punch_meter_backend.gameroom.GameRoomRepository;
+import com.example.punch_meter_backend.gameroom.GameRoomService;
 import com.example.punch_meter_backend.gameroom.dto.*;
-import com.example.punch_meter_backend.gameroom.record.CreateRoomResult;
-import com.example.punch_meter_backend.gameroom.record.JoinRoomResult;
 import com.example.punch_meter_backend.player.PlayerController;
-import com.example.punch_meter_backend.player.PlayerControllerRepository;
+import com.example.punch_meter_backend.player.internal.PlayerControllerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,11 +90,20 @@ public class GameRoomServiceImpl implements GameRoomService {
         Optional<PlayerController> controllerOpt = playerControllerRepository.findBySessionId(sessionId);
         if (controllerOpt.isPresent()) {
             PlayerController controller = controllerOpt.get();
-            String roomCode = controller.getGameRoom().getRoomCode();
+            GameRoom room = controller.getGameRoom();
+            String roomCode = room.getRoomCode();
             String playerName = controller.getPlayerName();
 
             playerControllerRepository.deleteBySessionId(sessionId);
-            log.info("Player {} left room {}", playerName, roomCode);
+
+            // Check if room is now empty and clean it up
+            if (room.getCurrentPlayerCount() == 0) {
+                // If it was the host that left, or room is completely empty
+                gameRoomRepository.delete(room);
+                log.info("Deleted empty room {} after player {} left", roomCode, playerName);
+            } else {
+                log.info("Player {} left room {}", playerName, roomCode);
+            }
         }
     }
 
@@ -105,8 +116,6 @@ public class GameRoomServiceImpl implements GameRoomService {
     public List<PlayerController> getRoomPlayers(String roomCode) {
         return playerControllerRepository.findByGameRoom_RoomCode(roomCode);
     }
-
-    // New business logic methods moved from controller
 
     @Override
     public RoomStateResponse buildRoomStateResponse(String roomCode) {
@@ -224,6 +233,41 @@ public class GameRoomServiceImpl implements GameRoomService {
                     deviceId, roomCode, event.getInputType());
         } else {
             log.warn("Controller input from unregistered device {} in room {}", deviceId, roomCode);
+        }
+    }
+
+    // Add these methods to your GameRoomServiceImpl class
+
+    @Transactional
+    public void cleanupEmptyRooms() {
+        List<GameRoom> emptyRooms = gameRoomRepository.findAll().stream()
+                .filter(room -> room.getCurrentPlayerCount() == 0)
+                .filter(room -> room.getCreatedAt().isBefore(LocalDateTime.now().minusMinutes(30)))
+                .collect(Collectors.toList());
+
+        if (!emptyRooms.isEmpty()) {
+            gameRoomRepository.deleteAll(emptyRooms);
+            log.info("Cleaned up {} empty rooms", emptyRooms.size());
+        }
+    }
+
+    @Scheduled(fixedRate = 300000) // Run every 5 minutes
+    public void scheduledCleanup() {
+        cleanupEmptyRooms();
+        cleanupDisconnectedControllers();
+    }
+
+    @Transactional
+    public void cleanupDisconnectedControllers() {
+        // Clean up controllers that have been disconnected for more than 10 minutes
+        List<PlayerController> staleControllers = playerControllerRepository.findAll().stream()
+                .filter(controller -> controller.getStatus() == PlayerController.ControllerStatus.DISCONNECTED)
+                .filter(controller -> controller.getJoinedAt().isBefore(LocalDateTime.now().minusMinutes(10)))
+                .collect(Collectors.toList());
+
+        if (!staleControllers.isEmpty()) {
+            playerControllerRepository.deleteAll(staleControllers);
+            log.info("Cleaned up {} stale controllers", staleControllers.size());
         }
     }
 
