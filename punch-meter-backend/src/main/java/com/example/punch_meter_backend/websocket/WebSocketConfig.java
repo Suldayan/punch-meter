@@ -14,12 +14,12 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+    private static final String FRONTEND_URL = "http://localhost:5173";
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/party")
-                .setAllowedOrigins("*")
-                .withSockJS();
+                .setAllowedOrigins(FRONTEND_URL);
     }
 
     @Override
