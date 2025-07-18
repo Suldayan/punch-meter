@@ -81,6 +81,43 @@ public class GameRoomController {
         }
     }
 
+    @MessageMapping("/player/ready")
+    public void handlePlayerReady(@Payload PlayerReadyRequest request, SimpMessageHeaderAccessor headerAccessor) {
+        String sessionId = headerAccessor.getSessionId();
+        String roomCode = (String) Objects.requireNonNull(headerAccessor.getSessionAttributes()).get("roomCode");
+        String deviceId = (String) headerAccessor.getSessionAttributes().get("deviceId");
+        String playerName = (String) headerAccessor.getSessionAttributes().get("playerName");
+
+        if (roomCode != null && deviceId != null && playerName != null) {
+            // Create a controller input event for the ready/unready action
+            ControllerInputEvent inputEvent = new ControllerInputEvent(
+                    roomCode,
+                    deviceId,
+                    request.isReady() ? "READY" : "UNREADY",
+                    null // No additional data needed for ready/unready
+            );
+
+            PlayerReadyResult result = gameRoomService.handlePlayerReadyWithResponse(roomCode, deviceId, inputEvent);
+
+            if (result.success()) {
+                // Send updated room state to all clients
+                var updateMessage = new GameUpdateMessage(
+                        result.getRoomState(),
+                        result.getPlayerActionEvent(),
+                        deviceId,
+                        System.currentTimeMillis()
+                );
+
+                messagingTemplate.convertAndSend("/topic/room/" + roomCode + "/updates", updateMessage);
+            } else {
+                messagingTemplate.convertAndSend("/topic/room/" + roomCode + "/controller/" + deviceId,
+                        new ErrorResponse(result.errorMessage()));
+            }
+        } else {
+            log.warn("Player ready received with invalid session data. Session: {}", sessionId);
+        }
+    }
+
     @MessageMapping("/controller/input")
     public void handleControllerInput(@Payload ControllerInputEvent event, SimpMessageHeaderAccessor headerAccessor) {
         String sessionId = headerAccessor.getSessionId();

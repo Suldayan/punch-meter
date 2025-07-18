@@ -216,27 +216,90 @@ public class GameRoomServiceImpl implements GameRoomService {
         if (controllerOpt.isPresent()) {
             PlayerController controller = controllerOpt.get();
 
-            // You can add additional business logic here based on the input type
             switch (event.getInputType()) {
                 case "READY":
                     controller.setReady(true);
                     playerControllerRepository.save(controller);
+                    log.info("Player {} in room {} is now ready", controller.getPlayerName(), roomCode);
                     break;
                 case "UNREADY":
                     controller.setReady(false);
                     playerControllerRepository.save(controller);
+                    log.info("Player {} in room {} is now unready", controller.getPlayerName(), roomCode);
                     break;
-                // Add more input types as needed
+                case "punch_ready":
+                    // Handle punch ready state (maybe different from general ready?)
+                    // You can implement specific logic here
+                    break;
+                default:
+                    // Handle other input types like "tap", "swipe", etc.
+                    log.info("Controller input from device {} in room {}: {}",
+                            deviceId, roomCode, event.getInputType());
+                    break;
             }
-
-            log.info("Controller input from device {} in room {}: {}",
-                    deviceId, roomCode, event.getInputType());
         } else {
             log.warn("Controller input from unregistered device {} in room {}", deviceId, roomCode);
         }
     }
 
-    // Add these methods to your GameRoomServiceImpl class
+    @Transactional
+    @Override
+    public PlayerReadyResult handlePlayerReadyWithResponse(String roomCode, String deviceId, ControllerInputEvent event) {
+        try {
+            // First validate that the room exists
+            Optional<GameRoom> roomOpt = getRoom(roomCode);
+            if (roomOpt.isEmpty()) {
+                log.warn("Player ready request received for non-existent room: {}", roomCode);
+                return new PlayerReadyResult("Room not found");
+            }
+
+            // Validate that the device is actually connected to this room
+            Optional<PlayerController> controllerOpt =
+                    playerControllerRepository.findByDeviceIdAndGameRoom_RoomCode(deviceId, roomCode);
+
+            if (controllerOpt.isEmpty()) {
+                log.warn("Player ready request from unregistered device {} in room {}", deviceId, roomCode);
+                return new PlayerReadyResult("Player not found in room");
+            }
+
+            PlayerController controller = controllerOpt.get();
+            GameRoom room = roomOpt.get();
+
+            // Update the ready state
+            boolean newReadyState = "READY".equals(event.getInputType());
+            boolean oldReadyState = controller.isReady();
+
+            if (newReadyState != oldReadyState) {
+                controller.setReady(newReadyState);
+                playerControllerRepository.save(controller);
+
+                // Build updated room state
+                RoomStateResponse roomState = buildRoomStateResponse(room.getRoomCode());
+
+                // Create player action event - using your existing structure
+                PlayerActionEvent playerActionEvent = new PlayerActionEvent(
+                        room.getRoomCode(),
+                        controller.getPlayerName(),
+                        deviceId,
+                        room.getCurrentPlayerCount()
+                );
+
+                log.info("Player {} in room {} is now {}",
+                        controller.getPlayerName(), roomCode, newReadyState ? "ready" : "not ready");
+
+                return new PlayerReadyResult(roomState, playerActionEvent);
+            } else {
+                // No change in state, still return success but no event
+                RoomStateResponse roomState = buildRoomStateResponse(room.getRoomCode());
+                return new PlayerReadyResult(roomState, null);
+            }
+
+        } catch (Exception e) {
+            String errorMessage = "Failed to update player ready state: " + e.getMessage();
+            log.error(errorMessage, e);
+            return new PlayerReadyResult(errorMessage);
+        }
+    }
 
     @Transactional
     public void cleanupEmptyRooms() {

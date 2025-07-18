@@ -18,4 +18,5 @@ public interface GameRoomService {
     CreateRoomResult createRoomWithResponse(String roomName, String deviceId);
     JoinRoomResult joinRoomWithResponse(String roomCode, String playerName, String deviceId, String sessionId);
     void handleControllerInput(String roomCode, String deviceId, ControllerInputEvent event);
+    PlayerReadyResult handlePlayerReadyWithResponse(String roomCode, String deviceId, ControllerInputEvent event);
 }
